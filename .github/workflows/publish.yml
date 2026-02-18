@@ -2,6 +2,7 @@ name: Publish MyFoo SDK
 
 permissions:
   contents: read
+  actions: read
   id-token: write  # Required for Trusted Publisher OIDC
 
 # Publish job triggered manually via workflow_dispatch
