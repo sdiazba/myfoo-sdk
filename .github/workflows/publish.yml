@@ -12,11 +12,13 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      # Download artifacts built previously
+      # Download artifacts from latest run of Build MyFoo SDK workflow
       - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: myfoo-sdk-artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Use gh to find and download the artifact
+        run: |
+          gh run download --name myfoo-sdk-artifacts --repo ${{ github.repository }}
 
       # Publish to PyPI via Trusted Publisher (OIDC)
       - name: Publish to PyPI
