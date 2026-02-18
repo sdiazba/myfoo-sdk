@@ -1,0 +1,63 @@
+name: Publish MyFoo SDK
+
+permissions:
+  contents: read
+  id-token: write  # Required for Trusted Publisher OIDC
+
+# Publish job triggered manually via workflow_dispatch
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # Download artifacts built previously
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: myfoo-sdk-artifacts
+
+      # Publish to PyPI via Trusted Publisher (OIDC)
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+      # Extract release notes from CHANGELOG.rst
+      - name: Extract release notes
+        id: release_notes
+        run: |
+          import re
+          import sys
+          from pathlib import Path
+
+          tag = "${{ github.ref_name }}"
+          version = tag.lstrip("v")
+          changelog = Path("CHANGELOG.rst").read_text()
+
+          pattern = re.compile(
+              rf"^(?P<header>{re.escape(version)}\s+-\s+\d{{4}}-\d{{2}}-\d{{2}})\n(?P<underline>-+)\n(?P<body>.*?)(?=\n\d+\.\d+\.\d+\s+-\s+\d{{4}}-\d{{2}}-\d{{2}}\n-+|\Z)",
+              re.DOTALL | re.MULTILINE,
+          )
+          match = pattern.search(changelog)
+          if not match:
+              print("::warning::No matching changelog section found; release notes will be empty.")
+              notes = ""
+          else:
+              notes = match.group("body").strip()
+
+          print(f"RELEASE_NOTES<<EOF\n{notes}\nEOF")
+          sys.stdout.flush()
+        shell: python
+
+      # Create GitHub Release
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: ${{ github.ref_name }}
+          body: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+          draft: false
+          prerelease: false
