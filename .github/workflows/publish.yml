@@ -13,6 +13,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      # Checkout the repository to access changelog
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       # Download artifacts from latest run of Build MyFoo SDK workflow
       - name: Download artifacts
         env:
@@ -31,29 +35,41 @@ jobs:
       # Extract release notes from CHANGELOG.rst
       - name: Extract release notes
         id: release_notes
+        shell: python
         run: |
           import re
           import sys
           from pathlib import Path
 
+          # 1. Clean the tag (e.g., "v1.0.0" -> "1.0.0")
           tag = "${{ github.ref_name }}"
           version = tag.lstrip("v")
-          changelog = Path("CHANGELOG.rst").read_text()
+          
+          # 2. Ensure the file exists (Checkout step must run before this!)
+          changelog_path = Path("CHANGELOG.rst")
+          if not changelog_path.exists():
+              print(f"::error::CHANGELOG.rst not found at {changelog_path.absolute()}")
+              sys.exit(1)
+              
+          changelog = changelog_path.read_text()
 
+          # Stops at: the next version header or end of file (\Z)
           pattern = re.compile(
-              rf"^(?P<header>{re.escape(version)}\s+-\s+\d{{4}}-\d{{2}}-\d{{2}})\n(?P<underline>-+)\n(?P<body>.*?)(?=\n\d+\.\d+\.\d+\s+-\s+\d{{4}}-\d{{2}}-\d{{2}}\n-+|\Z)",
-              re.DOTALL | re.MULTILINE,
+              rf"^{re.escape(version)}\s+-\s+\d{{4}}-\d{{2}}-\d{{2}}\n-+\n(.*?)(?=\n\d+\.\d+\.\d+\s+-\s+\d{{4}}-\d{{2}}-\d{{2}}\n-+|\Z)",
+              re.DOTALL | re.MULTILINE
           )
-          match = pattern.search(changelog)
-          if not match:
-              print("::warning::No matching changelog section found; release notes will be empty.")
-              notes = ""
-          else:
-              notes = match.group("body").strip()
 
-          print(f"RELEASE_NOTES<<EOF\n{notes}\nEOF")
-          sys.stdout.flush()
-        shell: python
+          match = pattern.search(changelog)
+          
+          if not match:
+              print(f"::warning::No matching changelog section found for version {version}")
+              notes = "No release notes provided."
+          else:
+              notes = match.group(1).strip()
+
+          # 4. Write to GitHub Output (Modern syntax)
+          with open("${{ github.output }}", "a") as f:
+              f.write(f"RELEASE_NOTES<<EOF\n{notes}\nEOF\n")
 
       # Create GitHub Release
       - name: Create GitHub Release
