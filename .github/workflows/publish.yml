@@ -1,7 +1,7 @@
 name: Publish MyFoo SDK
 
 permissions:
-  contents: read
+  contents: write
   actions: read
   id-token: write  # Required for Trusted Publisher OIDC
 
@@ -39,45 +39,50 @@ jobs:
         run: |
           import re
           import sys
+          import os
           from pathlib import Path
 
-          # 1. Clean the tag (e.g., "v1.0.0" -> "1.0.0")
+          # 1. Prepare version string
           tag = "${{ github.ref_name }}"
           version = tag.lstrip("v")
           
-          # 2. Ensure the file exists (Checkout step must run before this!)
+          # 2. Load file
           changelog_path = Path("CHANGELOG.rst")
           if not changelog_path.exists():
-              print(f"::error::CHANGELOG.rst not found at {changelog_path.absolute()}")
+              print(f"::error::CHANGELOG.rst not found")
               sys.exit(1)
-              
-          changelog = changelog_path.read_text()
+          
+          content = changelog_path.read_text()
 
-          # Stops at: the next version header or end of file (\Z)
+          # 3. Regex Breakdown:
+          # ^ matches start of line (due to MULTILINE)
+          # {version} \s+ - \s+ \d{{4}}... matches "1.0.0 - 2026-02-18"
+          # \n-+ matches the underline of dashes/equals
+          # (.*?) captures the body until the next version header or end of file (\Z)
           pattern = re.compile(
               rf"^{re.escape(version)}\s+-\s+\d{{4}}-\d{{2}}-\d{{2}}\n-+\n(.*?)(?=\n\d+\.\d+\.\d+\s+-\s+\d{{4}}-\d{{2}}-\d{{2}}\n-+|\Z)",
               re.DOTALL | re.MULTILINE
           )
 
-          match = pattern.search(changelog)
+          match = pattern.search(content)
           
-          if not match:
-              print(f"::warning::No matching changelog section found for version {version}")
-              notes = "No release notes provided."
-          else:
+          if match:
               notes = match.group(1).strip()
+          else:
+              print(f"::warning::No section found for version {version}")
+              notes = "No release notes found in CHANGELOG.rst"
 
-          # 4. Write to GitHub Output (Modern syntax)
-          with open("${{ github.output }}", "a") as f:
+          # 4. The "Heredoc" method for multi-line GitHub outputs
+          # This writes to the unique file path provided by the runner environment
+          output_file = os.environ['GITHUB_OUTPUT']
+          with open(output_file, 'a') as f:
               f.write(f"RELEASE_NOTES<<EOF\n{notes}\nEOF\n")
 
       # Create GitHub Release
       - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          body: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
-          draft: false
-          prerelease: false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "${{ github.ref_name }}" \
+            --notes "${{ steps.release_notes.outputs.RELEASE_NOTES }}"
