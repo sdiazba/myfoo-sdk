@@ -19,8 +19,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         # Use gh to find and download the artifact
         run: |
-          gh run download --name myfoo-sdk-artifacts --repo ${{ github.repository }}
-
+          mkdir -p dist
+          gh run download --name myfoo-sdk-artifacts --dir dist --repo ${{ github.repository }}
+      
       # Publish to PyPI via Trusted Publisher (OIDC)
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
