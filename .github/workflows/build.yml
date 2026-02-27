@@ -2,8 +2,7 @@ name: Build MyFoo SDK
 
 permissions:
   contents: read
-  id-token: write  # Required for Trusted Publisher OIDC
-
+  
 # Build job automatically on tags
 on:
   push:
