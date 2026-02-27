@@ -2,7 +2,8 @@ name: Publish MyFoo SDK
 
 permissions:
   contents: write
-  actions: read 
+  actions: read
+  id-token: write  # Required for Trusted Publisher OIDC
 
 # Publish job triggered manually via workflow_dispatch
 on:
@@ -11,8 +12,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write  # Required for Trusted Publisher OIDC
     steps:
       # Checkout the repository to access changelog
       - name: Checkout repository
